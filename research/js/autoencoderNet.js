@@ -1,16 +1,7 @@
 // globals
-var layer_defs, net, trainer;
+var net;
 var t = "\
-layer_defs = [];\n\
-layer_defs.push({type:'input', out_sx:1, out_sy:1, out_depth:8});\n\
-layer_defs.push({type:'fc', num_neurons:8, bias_pref: 1.0, activation:'step'});\n\
-//layer_defs.push({type:'regression', num_neurons:8});\n\
-layer_defs.push({type:'softmax', num_classes:127});\n\
-\n\
-net = new convnetjs.Net();\n\
-net.makeLayers(layer_defs);\n\
-\n\
-trainer = new convnetjs.Trainer(net, {learning_rate:0.5, method:'adadelta', batch_size:25, l2_decay:0.00001, l1_decay:0.0});\n\
+net = new convnetjs.netprototype.AutoEncoder({in_depth: 8});\n\
 ";
 
 var literature_str;
@@ -87,7 +78,7 @@ var output_test = function(){
   //x.w[inputCharCode] = 1;
   
   for(var i = 0; i < maxInputDimension; i++){
-    x.w[i] = inputArr[i]*2 - 1;
+    x.w[i] = inputArr[i];
   }
   
   var act = net.forward(x);
@@ -96,7 +87,6 @@ var output_test = function(){
   
   outString += "Input: " + inputCharCode + "\n";
   outString += "Input Raw: " + x.w.toString() + "\n";
-  outString += "Output: " + getMaxInVol(act) + "\n";
   outString += "Output Raw: " + act.w.toString() + "\n";
   
   document.getElementById("output_sequence").value = outString;
@@ -160,7 +150,7 @@ var load_and_step = function() {
   //x.w[inputCharCode] = 1;
   
   for(var i = 0; i < maxInputDimension; i++){
-    x.w[i] = inputArr[i]*2 - 1;
+    x.w[i] = inputArr[i];
   }
   
   step({x : x, label: inputCharCode, encode: inputArr}); // process this image
@@ -181,8 +171,8 @@ var step_num = 0;
 
 var step = function(sample) {
   // train on it with network
-  // var stats = trainer.train(sample.x, sample.x.w); //for regression
-  var stats = trainer.train(sample.x, sample.label); 
+  var stats = net.train(sample.x); //for regression
+  //var stats = trainer.train(sample.x, sample.label); //for softmax
   
   if(isNaN(stats.loss)){
     // console.log('trainer returns NaN');
@@ -244,11 +234,11 @@ var step = function(sample) {
 
 // user settings 
 var change_lr = function() {
-  trainer.learning_rate = parseFloat(document.getElementById("lr_input").value);
+  net.trainer.learning_rate = parseFloat(document.getElementById("lr_input").value);
   update_net_param_display();
 }
 var update_net_param_display = function() {
-  document.getElementById('lr_input').value = trainer.learning_rate;
+  document.getElementById('lr_input').value = net.trainer.learning_rate;
 }
 var toggle_pause = function() {
   paused = !paused;
@@ -275,7 +265,7 @@ var load_from_json = function() {
   net = new convnetjs.Net();
   net.fromJSON(json);
   
-  trainer = new convnetjs.Trainer(net, {learning_rate:0.5, method:'adadelta', batch_size:1, l2_decay:0.00000001, l1_decay:0.0});
+  net.trainer = new convnetjs.Trainer(net, {learning_rate:0.5, method:'adadelta', batch_size:1, l2_decay:0.00000001, l1_decay:0.0});
   
   alert("net loaded");
   reset_all();

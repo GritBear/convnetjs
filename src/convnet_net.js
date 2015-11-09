@@ -1,16 +1,24 @@
 (function(global) {
   "use strict";
-  var Vol = global.Vol; // convenience
+  //var Vol = global.Vol; // convenience
   var assert = global.assert;
 
   // Net manages a set of layers
   // For now constraints: Simple linear order of layers, first layer input last layer a cost layer
-  var Net = function(options) {
+  var Net = function() {
     this.layers = [];
     this.bufferLayer = [];
   }
 
   Net.prototype = {
+    getBuffer: function(){
+      var bufferLayerOut = [];
+      for(var i = 0; i < this.bufferLayer.length; i++){
+        bufferLayerOut.push(this.bufferLayer[i].out_act);
+      }
+      return bufferLayerOut;
+    },
+    
     // takes a list of layer definitions and creates the network layer objects
     makeLayers: function(defs) {
 
@@ -24,13 +32,13 @@
         for(var i=0;i<defs.length;i++) {
           var def = defs[i];
           
-          if(def.type==='softmax' || def.type==='svm' || def.type==='binaryReinforce') {
+          if(def.type==='softmax' || def.type==='svm') {
             // add an fc layer here, there is no reason the user should
             // have to worry about this and we almost always want to
             new_defs.push({type:'fc', num_neurons: def.num_classes});
           }
 
-          if(def.type==='regression') {
+          if(def.type==='regression'|| def.type==='binaryReinforce') {
             // add an fc layer here, there is no reason the user should
             // have to worry about this and we almost always want to
             new_defs.push({type:'fc', num_neurons: def.num_neurons});
@@ -45,9 +53,23 @@
               // and will never get any gradient and never contribute any computation. Dead relu.
             }
           }
-
+          
+          // inhibitory gate
+          if(def.type==='fc' && typeof(def.inputGate) !=='undefined'){
+              console.log(typeof(def.inputGate) !=='undefined');
+              var inGateNumber = def.inputGate.gate_depth;
+              def.num_neurons += inGateNumber; 
+          }
+          
           new_defs.push(def);
-
+          
+          // Input Gate
+          if(typeof def.inputGate !== 'undefined') {
+            var inGateParam = def.inputGate;
+            inGateParam.type = 'ingate';
+            new_defs.push(inGateParam);
+          }
+          
           if(typeof def.activation !== 'undefined') {
             if(def.activation==='relu') { new_defs.push({type:'relu'}); }
             else if (def.activation==='sigmoid') { new_defs.push({type:'sigmoid'}); }
@@ -60,6 +82,7 @@
             }
             else { console.log('ERROR unsupported activation ' + def.activation); }
           }
+          
           if(typeof def.drop_prob !== 'undefined' && def.type !== 'dropout') {
             new_defs.push({type:'dropout', drop_prob: def.drop_prob});
           }
@@ -83,16 +106,22 @@
         switch(def.type) {
           case 'fc': this.layers.push(new global.FullyConnLayer(def)); break;
           case 'lrn': this.layers.push(new global.LocalResponseNormalizationLayer(def)); break;
+          
           case 'lstm' : this.layers.push(new global.LSTMLayer(def)); break;
+          
           case 'buffer' : 
             var bufferLayer = new global.BufferLayer(def);
             this.layers.push(bufferLayer); 
             this.bufferLayer.push(bufferLayer)
           break;
+          
           case 'dropout': this.layers.push(new global.DropoutLayer(def)); break;
           case 'input': this.layers.push(new global.InputLayer(def)); break;
           case 'softmax': this.layers.push(new global.SoftmaxLayer(def)); break;
+          
+          case 'ingate': this.layers.push(new global.InputGateLayer(def)); break;
           case 'binaryReinforce': this.layers.push(new global.BinaryReinforceLayer(def)); break;
+          
           case 'regression': this.layers.push(new global.RegressionLayer(def)); break;
           case 'conv': this.layers.push(new global.ConvLayer(def)); break;
           case 'pool': this.layers.push(new global.PoolLayer(def)); break;
@@ -195,7 +224,11 @@
         if(t==='fc') { L = new global.FullyConnLayer(); }
         if(t==='maxout') { L = new global.MaxoutLayer(); }
         if(t==='svm') { L = new global.SVMLayer(); }
+        
+        //TODO DEBUG
         if(t==='binaryReinforce') { L = new global.BinaryReinforceLayer(); }
+        if(t==='ingate') { L = new global.InputGateLayer(); }
+        
         if(t==='lstm') { L = new global.LSTMLayer(); }
         if(t==='buffer') { L = new global.BufferLayer(); }
         if(t==='step') { L = new global.StepLayer(); }
